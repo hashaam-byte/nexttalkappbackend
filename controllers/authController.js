@@ -2,6 +2,15 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User'); // Mongoose or Sequelize model
 
+// For managed PostgreSQL (e.g. Neon, Heroku, Railway, Render), SSL is required.
+// rejectUnauthorized: false allows self-signed certificates (safe for managed DBs, not for production on your own server).
+// If you use Pool or Client here, use:
+// const { Pool } = require('pg');
+// const pool = new Pool({
+//   connectionString: process.env.DATABASE_URL,
+//   ssl: { rejectUnauthorized: false },
+// });
+
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;

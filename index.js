@@ -18,6 +18,17 @@ app.get("/", (req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 
+// For managed PostgreSQL (e.g. Neon, Heroku, Railway, Render), SSL is required.
+// rejectUnauthorized: false allows self-signed certificates (safe for managed DBs, not for production on your own server).
+// If you use Pool or Client elsewhere, use this config:
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // required for Neon or other managed PostgreSQL
+  },
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
