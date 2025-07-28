@@ -17,6 +17,22 @@ app.get("/", (req, res) => {
 // Main user API route
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
+// ✅ Test database connection
+app.get('/test-db', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW()');
+    res.status(200).json({
+      message: "✅ Database connected successfully!",
+      time: result.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "❌ Database connection failed!",
+      error: err.message,
+    });
+  }
+});
+
 
 // For managed PostgreSQL (e.g. Neon, Heroku, Railway, Render), SSL is required.
 // rejectUnauthorized: false allows self-signed certificates (safe for managed DBs, not for production on your own server).
