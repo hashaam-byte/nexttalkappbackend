@@ -22,14 +22,8 @@ exports.register = async (req, res) => {
     );
     const user = result.rows[0];
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    // Explicitly return user fields as expected by frontend
-    res.status(201).json({ 
-      token, 
-      user: { id: user.id, username: user.username, email: user.email }
-    });
+    res.status(201).json({ token, user });
   } catch (e) {
-    // Log error for debugging
-    console.error('Register error:', e);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -41,20 +35,12 @@ exports.login = async (req, res) => {
     if (result.rows.length === 0) return res.status(400).json({ message: "Invalid credentials" });
 
     const user = result.rows[0];
-    // Defensive: check user.password exists
-    if (!user.password) return res.status(500).json({ message: "Server error: password missing" });
-
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ message: "Invalid credentials" });
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ 
-      token, 
-      user: { id: user.id, username: user.username, email: user.email }
-    });
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
   } catch (e) {
-    // Log error for debugging
-    console.error('Login error:', e);
     res.status(500).json({ message: "Server error" });
   }
 };
