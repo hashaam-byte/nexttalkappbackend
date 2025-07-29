@@ -52,4 +52,55 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// GET /api/chats/recent?user_id=...
+router.get('/chats/recent', async (req, res) => {
+  const { user_id } = req.query;
+  try {
+    const result = await db.query(
+      `SELECT c.contact_name, c.avatar
+       FROM chats c
+       WHERE c.user_id = $1
+       ORDER BY c.last_message_time DESC
+       LIMIT 10`,
+      [user_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/walk/stats?user_id=...
+router.get('/walk/stats', async (req, res) => {
+  const { user_id } = req.query;
+  try {
+    // Steps, goal, coins, calories, distance, minutes, challenges
+    const stepsRes = await db.query(
+      `SELECT steps, goal, calories, distance, minutes, coins
+       FROM user_steps
+       WHERE user_id = $1 AND date = CURRENT_DATE`,
+      [user_id]
+    );
+    const steps = stepsRes.rows[0] || {};
+    // Challenges (dynamic, per user/day)
+    const challengesRes = await db.query(
+      `SELECT title, current, target, reward
+       FROM user_challenges
+       WHERE user_id = $1 AND date = CURRENT_DATE`,
+      [user_id]
+    );
+    res.json({
+      steps: steps.steps || 0,
+      goal: steps.goal || 10000,
+      coins: steps.coins || 0,
+      calories: steps.calories || 0,
+      distance: steps.distance || 0,
+      minutes: steps.minutes || 0,
+      challenges: challengesRes.rows || [],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
