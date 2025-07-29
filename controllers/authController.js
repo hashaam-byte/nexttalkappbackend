@@ -11,10 +11,6 @@ const pool = new Pool({
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    // Enforce minimum password length
-    if (!password || password.length < 8) {
-      return res.status(400).json({ message: "Password must be at least 8 characters." });
-    }
     // Check if user exists
     const userExists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (userExists.rows.length > 0) return res.status(400).json({ message: "User already exists" });
@@ -26,12 +22,8 @@ exports.register = async (req, res) => {
     );
     const user = result.rows[0];
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ 
-      token, 
-      user: { id: user.id, username: user.username, email: user.email }
-    });
+    res.status(201).json({ token, user });
   } catch (e) {
-    console.error('Register error:', e);
     res.status(500).json({ message: "Server error" });
   }
 };
