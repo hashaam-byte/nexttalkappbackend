@@ -1,51 +1,38 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 const app = express();
-const userRoutes = require('./routes/user');
-const authRoutes = require('./routes/auth');
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(cors());
 app.use(express.json());
 
-// ✅ Add this test route to check if backend is working
-app.get("/", (req, res) => {
-  res.status(200).json({ message: "✅ Backend is live and working!" });
-});
+// Import routes
+const userRoutes = require('./routes/user');
+const chatRoutes = require('./routes/chats');
+const authRoutes = require('./routes/auth');
+const mediaRoutes = require('./routes/media');
 
-// Main user API route
-app.use('/api/users', userRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/chats', chatRoutes);
 app.use('/api/auth', authRoutes);
-// ✅ Test database connection
-app.get('/test-db', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT NOW()');
-    res.status(200).json({
-      message: "✅ Database connected successfully!",
-      time: result.rows[0],
-    });
-  } catch (err) {
-    res.status(500).json({
-      message: "❌ Database connection failed!",
-      error: err.message,
-    });
-  }
+app.use('/api/media', mediaRoutes);
+app.use('/uploads', express.static('uploads'));
+
+// Socket.io for real-time chat
+io.on('connection', (socket) => {
+  socket.on('join', ({ userId }) => {
+    socket.join(userId);
+  });
+  socket.on('message', (data) => {
+    // Broadcast to recipient
+    io.to(data.to).emit('message', data);
+  });
 });
 
-
-// For managed PostgreSQL (e.g. Neon, Heroku, Railway, Render), SSL is required.
-// rejectUnauthorized: false allows self-signed certificates (safe for managed DBs, not for production on your own server).
-// If you use Pool or Client elsewhere, use this config:
-const { Pool } = require('pg');
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false, // required for Neon or other managed PostgreSQL
-  },
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

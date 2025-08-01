@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const verifyToken = require('../middleware/verifyToken');
+const pool = require('../db');
 
 // GET /api/chats/recent?user_id=...
-router.get('/recent', async (req, res) => {
+router.get('/recent', verifyToken, async (req, res) => {
   const { user_id } = req.query;
   try {
     const result = await db.query(

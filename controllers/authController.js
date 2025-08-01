@@ -1,12 +1,6 @@
+const pool = require('../db');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const { Pool } = require('pg');
-
-// For managed PostgreSQL (e.g. Neon, Heroku, Railway, Render), SSL is required.
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+const bcrypt = require('bcrypt');
 
 exports.register = async (req, res) => {
   try {
@@ -54,3 +48,6 @@ exports.me = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+  if (result.rows.length === 0) return res.status(404).json({ message: "User not found" });
+  res.json(result.rows[0]);
+
