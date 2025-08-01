@@ -23,10 +23,11 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
+  const { email, password } = req.body;
   try {
-    const { email, password } = req.body;
+    // Make sure to assign the query result to 'result'
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(400).json({ message: "Invalid credentials" });
+    if (result.rows.length === 0) return res.status(404).json({ message: "User not found" });
 
     const user = result.rows[0];
     const match = await bcrypt.compare(password, user.password);
@@ -48,6 +49,4 @@ exports.me = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-  if (result.rows.length === 0) return res.status(404).json({ message: "User not found" });
-  res.json(result.rows[0]);
 
