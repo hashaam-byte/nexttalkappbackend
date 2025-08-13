@@ -2,17 +2,31 @@ const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
 const pool = require('../db');
+const bcrypt = require('bcrypt');
 
 // Register new user
 router.post('/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
-    const result = await db.query(
-      `INSERT INTO users (username, email, password) VALUES ($1, $2, crypt($3, gen_salt('bf'))) RETURNING *`,
-      [username, email, password]
+    if (!password || password.trim() === '') {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    // Check if user exists
+    const userExists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (userExists.rows.length > 0) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+    // Hash password with bcrypt
+    const hashed = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      `INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email`,
+      [username, email, hashed]
     );
     res.json(result.rows[0]);
   } catch (err) {
+    if (err.message && err.message.includes('null value in column "password"')) {
+      return res.status(400).json({ error: 'Password is required and must not be empty.' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
