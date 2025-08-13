@@ -5,6 +5,10 @@ const bcrypt = require('bcrypt');
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
+    // Validate password
+    if (!password || password.trim() === '') {
+      return res.status(400).json({ message: "Password is required" });
+    }
     // Check if user exists
     const userExists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (userExists.rows.length > 0) {
@@ -25,6 +29,9 @@ exports.register = async (req, res) => {
     }
     if (e.code === '23505') {
       return res.status(400).json({ message: "User already exists" });
+    }
+    if (e.message && e.message.includes('null value in column "password"')) {
+      return res.status(400).json({ message: "Password is required and must not be empty." });
     }
     res.status(500).json({ message: e.message || "Server error" });
   }
