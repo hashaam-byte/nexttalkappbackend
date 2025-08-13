@@ -34,7 +34,7 @@ router.post('/register', async (req, res) => {
 // Get all users
 router.get('/', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM users');
+    const result = await pool.query('SELECT * FROM users');
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -60,7 +60,7 @@ router.get('/stats', verifyToken, async (req, res) => {
 router.get('/chats/recent', async (req, res) => {
   const { user_id } = req.query;
   try {
-    const result = await db.query(
+    const result = await pool.query(
       `SELECT c.contact_name, c.avatar
        FROM chats c
        WHERE c.user_id = $1
@@ -83,7 +83,7 @@ router.get('/walk/stats', async (req, res) => {
   const { user_id } = req.query;
   try {
     // Get today's walk stats
-    const stepsRes = await db.query(
+    const stepsRes = await pool.query(
       `SELECT steps, goal, calories, distance, minutes, coins
        FROM user_steps
        WHERE user_id = $1 AND date = CURRENT_DATE`,
@@ -92,7 +92,7 @@ router.get('/walk/stats', async (req, res) => {
     const steps = stepsRes.rows[0] || {};
     
     // Get active challenges for today
-    const challengesRes = await db.query(
+    const challengesRes = await pool.query(
       `SELECT 
          c.id,
          c.title,
@@ -134,7 +134,7 @@ router.post('/walk/report', async (req, res) => {
   
   try {
     // Upsert user steps for today
-    await db.query(
+    await pool.query(
       `INSERT INTO user_steps (user_id, date, steps, distance, calories, minutes, updated_at)
        VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, NOW())
        ON CONFLICT (user_id, date)
@@ -152,14 +152,14 @@ router.post('/walk/report', async (req, res) => {
     
     // Update user's total coins
     if (coinsEarned > 0) {
-      await db.query(
+      await pool.query(
         `UPDATE users SET coins = coins + $1 WHERE id = $2`,
         [coinsEarned, user_id]
       );
     }
 
     // Log activity for anti-cheat
-    await db.query(
+    await pool.query(
       `INSERT INTO activity_logs (user_id, activity_type, data, created_at)
        VALUES ($1, 'step_report', $2, NOW())`,
       [user_id, JSON.stringify({ 
@@ -187,7 +187,7 @@ router.post('/walk/claim-reward', async (req, res) => {
   
   try {
     // Check if challenge is completed and not already claimed
-    const challengeCheck = await db.query(
+    const challengeCheck = await pool.query(
       `SELECT uc.*, c.target_steps, us.steps
        FROM user_challenges uc
        JOIN challenges c ON uc.challenge_id = c.id
@@ -213,7 +213,7 @@ router.post('/walk/claim-reward', async (req, res) => {
     }
 
     // Mark as completed and claimed
-    await db.query(
+    await pool.query(
       `UPDATE user_challenges 
        SET is_completed = true, reward_claimed = true, completed_at = NOW()
        WHERE user_id = $1 AND challenge_id = $2 AND assigned_at = CURRENT_DATE`,
@@ -221,13 +221,13 @@ router.post('/walk/claim-reward', async (req, res) => {
     );
 
     // Add coins to user
-    await db.query(
+    await pool.query(
       `UPDATE users SET coins = coins + $1 WHERE id = $2`,
       [reward_amount, user_id]
     );
 
     // Get updated total coins
-    const userResult = await db.query(
+    const userResult = await pool.query(
       `SELECT coins FROM users WHERE id = $1`,
       [user_id]
     );
@@ -253,7 +253,7 @@ router.post('/challenge/assign', async (req, res) => {
 
   try {
     // Check if challenge already assigned today
-    const existing = await db.query(
+    const existing = await pool.query(
       `SELECT * FROM user_challenges WHERE user_id = $1 AND assigned_at = $2`,
       [user_id, today]
     );
@@ -263,7 +263,7 @@ router.post('/challenge/assign', async (req, res) => {
     }
 
     // Get or create user challenge status
-    const status = await db.query(
+    const status = await pool.query(
       `SELECT * FROM user_challenge_status WHERE user_id = $1`,
       [user_id]
     );
@@ -272,14 +272,14 @@ router.post('/challenge/assign', async (req, res) => {
     if (status.rows.length > 0) {
       current_level = status.rows[0].current_level;
     } else {
-      await db.query(
+      await pool.query(
         `INSERT INTO user_challenge_status (user_id, current_level) VALUES ($1, $2)`,
         [user_id, 'beginner']
       );
     }
 
     // Get random challenge for user's level
-    const challenge = await db.query(
+    const challenge = await pool.query(
       `SELECT * FROM challenges WHERE level = $1 ORDER BY RANDOM() LIMIT 1`,
       [current_level]
     );
@@ -289,7 +289,7 @@ router.post('/challenge/assign', async (req, res) => {
     }
 
     // Assign challenge to user
-    await db.query(
+    await pool.query(
       `INSERT INTO user_challenges (user_id, challenge_id, assigned_at) VALUES ($1, $2, CURRENT_DATE)`,
       [user_id, challenge.rows[0].id]
     );
@@ -306,7 +306,7 @@ router.post('/challenge/complete', async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
 
   try {
-    const challenge = await db.query(
+    const challenge = await pool.query(
       `SELECT * FROM user_challenges WHERE user_id = $1 AND assigned_at = $2`,
       [user_id, today]
     );
@@ -315,12 +315,12 @@ router.post('/challenge/complete', async (req, res) => {
       return res.status(404).json({ error: 'No assigned challenge for today' });
     }
 
-    await db.query(
+    await pool.query(
       `UPDATE user_challenges SET is_completed = true WHERE id = $1`,
       [challenge.rows[0].id]
     );
 
-    const statusRes = await db.query(
+    const statusRes = await pool.query(
       `SELECT * FROM user_challenge_status WHERE user_id = $1`,
       [user_id]
     );
@@ -334,7 +334,7 @@ router.post('/challenge/complete', async (req, res) => {
     if (current_level === 'beginner' && streak_count >= 5) current_level = 'intermediate';
     if (current_level === 'intermediate' && streak_count >= 10) current_level = 'advanced';
 
-    await db.query(
+    await pool.query(
       `UPDATE user_challenge_status 
        SET streak_count = $1, total_completed = $2, current_level = $3, last_completed_at = CURRENT_DATE 
        WHERE user_id = $4`,
@@ -353,13 +353,13 @@ router.post('/challenge/reset_if_missed', async (req, res) => {
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
   try {
-    const challenge = await db.query(
+    const challenge = await pool.query(
       `SELECT * FROM user_challenges WHERE user_id = $1 AND assigned_at = $2`,
       [user_id, yesterday]
     );
 
     if (challenge.rows.length && !challenge.rows[0].is_completed) {
-      await db.query(
+      await pool.query(
         `UPDATE user_challenge_status SET streak_count = 0, current_level = 'beginner' WHERE user_id = $1`,
         [user_id]
       );
@@ -377,7 +377,7 @@ router.get('/challenge/current', async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
 
   try {
-    const challenge = await db.query(
+    const challenge = await pool.query(
       `SELECT c.*, uc.is_completed 
        FROM user_challenges uc 
        JOIN challenges c ON uc.challenge_id = c.id 
@@ -385,7 +385,7 @@ router.get('/challenge/current', async (req, res) => {
       [user_id, today]
     );
 
-    const status = await db.query(
+    const status = await pool.query(
       `SELECT current_level, streak_count, total_completed 
        FROM user_challenge_status 
        WHERE user_id = $1`,

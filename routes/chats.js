@@ -7,7 +7,7 @@ const pool = require('../db');
 router.get('/recent', verifyToken, async (req, res) => {
   const { user_id } = req.query;
   try {
-    const result = await db.query(
+    const result = await pool.query(
       `SELECT c.contact_name, c.avatar, m.text as last_message, m.timestamp
        FROM chats c
        LEFT JOIN messages m ON m.chat_id = c.id
