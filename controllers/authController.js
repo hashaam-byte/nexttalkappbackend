@@ -20,7 +20,9 @@ exports.register = async (req, res) => {
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({ token, user });
   } catch (e) {
-    // If error is a unique constraint violation, send a clear message
+    if (e.message && e.message.includes('column "password"')) {
+      return res.status(500).json({ message: 'Database error: column "password" does not exist. Please check your users table schema.' });
+    }
     if (e.code === '23505') {
       return res.status(400).json({ message: "User already exists" });
     }
@@ -37,6 +39,9 @@ exports.login = async (req, res) => {
     }
 
     const user = result.rows[0];
+    if (!user.password) {
+      return res.status(500).json({ message: 'Database error: column "password" does not exist. Please check your users table schema.' });
+    }
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -45,6 +50,9 @@ exports.login = async (req, res) => {
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
   } catch (e) {
+    if (e.message && e.message.includes('column "password"')) {
+      return res.status(500).json({ message: 'Database error: column "password" does not exist. Please check your users table schema.' });
+    }
     res.status(500).json({ message: e.message || "Server error" });
   }
 };
