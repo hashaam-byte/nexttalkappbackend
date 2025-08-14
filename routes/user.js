@@ -41,19 +41,32 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Example: Get user stats
+// GET /api/user/stats?user_id=...
 router.get('/stats', verifyToken, async (req, res) => {
   const { user_id } = req.query;
-  // ...fetch stats from DB...
-  res.json({
-    display_name: 'User',
-    coins: 100,
-    steps: 2000,
-    lucky_box_available: true,
-    profile_image: '',
-    streak: 3,
-    messages: 12,
-  });
+  try {
+    // Fetch user stats from DB
+    const userRes = await pool.query(
+      `SELECT display_name, coins, profile_image FROM users WHERE id = $1`, [user_id]
+    );
+    const stepsRes = await pool.query(
+      `SELECT steps FROM user_steps WHERE user_id = $1 AND date = CURRENT_DATE`, [user_id]
+    );
+    const streakRes = await pool.query(
+      `SELECT streak_count FROM user_challenge_status WHERE user_id = $1`, [user_id]
+    );
+    res.json({
+      display_name: userRes.rows[0]?.display_name || 'User',
+      coins: userRes.rows[0]?.coins || 0,
+      steps: stepsRes.rows[0]?.steps || 0,
+      lucky_box_available: true,
+      profile_image: userRes.rows[0]?.profile_image || '',
+      streak: streakRes.rows[0]?.streak_count || 0,
+      messages: 0, // Add messages count if needed
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/user/chats/recent?user_id=...
@@ -84,14 +97,17 @@ router.get('/walk/stats', async (req, res) => {
   try {
     // Get today's walk stats
     const stepsRes = await pool.query(
-      `SELECT steps, goal, calories, distance, minutes, coins
+      `SELECT steps, calories, distance, minutes, coins
        FROM user_steps
        WHERE user_id = $1 AND date = CURRENT_DATE`,
       [user_id]
     );
     const steps = stepsRes.rows[0] || {};
-    
-    // Get active challenges for today
+
+    // Default daily goal
+    const dailyGoal = 10000;
+
+    // Get active challenges for today (if assigned)
     const challengesRes = await pool.query(
       `SELECT 
          c.id,
@@ -114,14 +130,38 @@ router.get('/walk/stats', async (req, res) => {
       [user_id]
     );
 
+    // If no challenges assigned for today, return all for the user's level
+    let challenges = challengesRes.rows;
+    if (!challenges.length) {
+      const fallbackRes = await pool.query(
+        `SELECT 
+           c.id,
+           c.title,
+           c.description,
+           c.target_steps as target,
+           c.reward_coins as reward,
+           false as completed,
+           0 as current
+         FROM challenges c
+         WHERE c.level = (
+           SELECT COALESCE(current_level, 'beginner') 
+           FROM user_challenge_status 
+           WHERE user_id = $1
+         )
+         ORDER BY c.target_steps`,
+        [user_id]
+      );
+      challenges = fallbackRes.rows;
+    }
+
     res.json({
       steps: steps.steps || 0,
-      goal: steps.goal || 10000,
+      goal: dailyGoal,
       coins: steps.coins || 0,
       calories: steps.calories || 0,
       distance: steps.distance || 0.0,
       minutes: steps.minutes || 0,
-      challenges: challengesRes.rows || [],
+      challenges: challenges,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
