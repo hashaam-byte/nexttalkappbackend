@@ -288,8 +288,13 @@ router.post('/walk/claim-reward', async (req, res) => {
 
 // Assign daily challenge (called on login or app start)
 router.post('/challenge/assign', async (req, res) => {
-  const { user_id } = req.body;
+  let { user_id } = req.body;
   const today = new Date().toISOString().split('T')[0];
+
+  // If user_id is not a valid UUID, try to parse as integer
+  if (typeof user_id === 'string' && !/^[0-9a-fA-F-]{36}$/.test(user_id)) {
+    user_id = parseInt(user_id, 10);
+  }
 
   try {
     // Check if challenge already assigned today
